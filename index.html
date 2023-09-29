@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket Chat</title>
+</head>
+<body>
+    <div id="registration">
+        <input type="text" id="username" placeholder="Enter your name" />
+        <button onclick="register()">Register</button>
+    </div>
+    <div id="chat" style="display: none;">
+        <select id="userList" onchange="selectUser()"></select>
+        <textarea id="chatArea" readonly></textarea>
+        <input type="text" id="messageInput" placeholder="Type your message" />
+        <button onclick="sendMessage()">Send</button>
+    </div>
+    
+    <script>
+        let socket;
+        let username;
+        let chatHistory = {};
+        let selectedUser = null;
+
+        function register() {
+            username = document.getElementById('username').value;
+            if (!username) return;
+
+            socket = new WebSocket('ws://localhost:8765');
+            socket.addEventListener('open', () => {
+                socket.send(JSON.stringify({ type: 'register', data: username }));
+                document.getElementById('registration').style.display = 'none';
+                document.getElementById('chat').style.display = 'block';
+            });
+
+            socket.addEventListener('message', (event) => {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'users') {
+                    updateUserList(msg.data);
+                } else if (msg.type === 'message') {
+                    const sender = msg.sender;
+                    if (!chatHistory[sender]) {
+                        chatHistory[sender] = '';
+                    }
+                    chatHistory[sender] += `${sender === username ? 'You' : sender}: ${msg.data}\n`;
+                    if (sender === selectedUser || sender === username) {
+                        updateChatArea();
+                    }
+                }
+            });
+        }
+
+        function updateUserList(users) {
+            const userList = document.getElementById('userList');
+            userList.innerHTML = '';
+            users.forEach(user => {
+                console.log(user, username);
+                if (user !== username) {
+                    const option = document.createElement('option');
+                    option.text = user;
+                    option.value = user;
+                    userList.add(option);
+                }
+            });
+            selectUser();
+        }
+
+        function sendMessage() {
+            const recipient = document.getElementById('userList').value;
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value;
+            
+            if (!recipient || !message) return;
+
+            socket.send(JSON.stringify({ type: 'message', recipient, data: message }));
+            if (!chatHistory[recipient]) {
+                chatHistory[recipient] = '';
+            }
+            chatHistory[recipient] += `You: ${message}\n`;
+            updateChatArea();
+            messageInput.value = '';
+        }
+
+        function selectUser() {
+            selectedUser = document.getElementById('userList').value;
+            updateChatArea();
+        }
+
+        function updateChatArea() {
+            const chatArea = document.getElementById('chatArea');
+            chatArea.value = chatHistory[selectedUser] || '';
+        }
+    </script>
+</body>
+</html>
